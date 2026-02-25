@@ -92,7 +92,11 @@ fn stage(file_name: &str) {
 
         let mut files = Vec::new();
         if let Err(err) = collect_files_recursive(&dir, &dir, &mut files) {
-            println!("{}: Failed to read directory tree: {}", "nyra".purple(), err);
+            println!(
+                "{}: Failed to read directory tree: {}",
+                "nyra".purple(),
+                err
+            );
             return;
         }
 
@@ -202,16 +206,54 @@ fn commit(messege: &String) {
 
     let mut staged_section = false;
 
-    let staged_files: Vec<String>;
+    let mut staged_files: Vec<String> = Vec::new();
 
     for line in lines {
         if line == "[STAGED]" {
             staged_section = true;
         }
         if staged_section && line != "[STAGED]" {
-            println!("{}", line);
+            if line.starts_with("[") {
+                break;
+            }
+            if !line.is_empty() {
+                staged_files.push(line);
+            }
         }
     }
+
+    if staged_files.len() == 0 {
+        println!("{}: {}", "nyra".purple(), "No currently staged files");
+        return;
+    }
+
+    let now = Local::now();
+
+    let new_object_string = &format!(".nyra/objects/{}-OBJECT", now);
+    let new_object_path = Path::new(new_object_string);
+
+    fs::create_dir(new_object_path).unwrap();
+
+    for file in &staged_files {
+        let from = Path::new(file);
+
+        let mut to = PathBuf::from(new_object_path);
+        to.push(from);
+
+        if let Some(parent) = to.parent() {
+            fs::create_dir_all(parent).unwrap();
+        }
+
+        fs::copy(from, to).unwrap();
+    }
+
+    let mut path_buff = PathBuf::new();
+    path_buff.push(new_object_path);
+    path_buff.push(".info.txt");
+
+    let contents = format!("{}\n{}", Local::now(), messege);
+
+    fs::write(path_buff, contents).unwrap();
 }
 
 fn main() {
